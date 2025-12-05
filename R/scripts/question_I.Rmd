@@ -1,0 +1,74 @@
+```{r}
+
+# ============================================================================
+# PREGUNTA 1: TWFE & EVENT-STUDY - SOLUCIÓN COMPLETA EN R
+# ============================================================================
+
+# PASO 0: INSTALACIÓN Y CARGA DE PAQUETES NECESARIOS
+cat("Instalando y cargando paquetes necesarios...\n")
+packages <- c("tidyverse", "fixest", "lmtest", "sandwich", "broom", "knitr")
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages, repos = "http://cran.us.r-project.org")
+invisible(lapply(packages, library, character.only = TRUE))
+cat("✓ Paquetes cargados correctamente\n\n")
+
+# ============================================================================
+# PARTE A: TWO-WAY FIXED EFFECTS (TWFE) REGRESSION
+# ============================================================================
+url <- "https://raw.githubusercontent.com/LOST-STATS/LOST-STATS.github.io/master/Model_Estimation/Data/Event_Study_DiD/bacon_example.csv"
+cat("\nCargando datos desde:", url, "\n")
+df <- read.csv(url)
+cat("✓ Datos cargados exitosamente\n")
+
+df <- read.csv(url)
+cat("✓ Datos cargados exitosamente\n")
+
+# Renombrar columna X_nfd a _nfd (corrección)
+names(df)[names(df) == "X_nfd"] <- "_nfd"
+
+# Crear variable de tratamiento (ya funcionará)
+df <- df %>%
+  mutate(treated = if_else(!is.na(.data[["_nfd"]]) & year >= .data[["_nfd"]], 1, 0))
+
+# Crear variable de tiempo relativo
+df <- df %>%
+  mutate(event_time = if_else(!is.na(.data[["_nfd"]]), year - .data[["_nfd"]], as.numeric(-1000)))
+
+
+# Verificar si event_time fue creado
+cat("Columnas en df tras crear event_time:\n")
+print(names(df))
+
+# Modelo TWFE
+twfe_model <- feols(asmrs ~ treated + pcinc + asmrh + cases | stfips + year, 
+                    data = df, 
+                    cluster = ~stfips)
+cat("✓ Modelo TWFE estimado\n")
+print(summary(twfe_model))
+
+# ============================================================================
+# PARTE B: EVENT TIME
+# ============================================================================
+
+# Tabla de frecuencias
+df_treated <- df %>% filter(event_time != -1000)
+freq_table <- df_treated %>%
+  count(event_time, name = "Frecuencia") %>%
+  arrange(event_time) %>%
+  mutate(Porcentaje = round(Frecuencia / sum(Frecuencia) * 100, 2))
+print(freq_table)
+
+# Distribución acumulada 
+png("event_time_distribution.png", width = 10, height = 6, units = "in", res = 300)
+cumsum_data <- cumsum(freq_table$Frecuencia) / sum(freq_table$Frecuencia) * 100
+plot(freq_table$event_time, cumsum_data, type = "b", pch = 16, col = "steelblue",
+     lwd = 2, main = "Distribución Acumulada de Event Time",
+     xlab = "Event Time", ylab = "Porcentaje Acumulado (%)",
+     cex.main = 1.2, font.main = 2, cex.lab = 1.1, font.lab = 2)
+abline(v = 0, col = "red", lwd = 2, lty = 2)
+legend("bottomright", legend = "Tratamiento (t=0)", col = "red", lwd = 2, lty = 2)
+grid()
+dev.off()
+cat("✓ Gráfico de distribución acumulada guardado: event_time_distribution.png\n")
+
+```
